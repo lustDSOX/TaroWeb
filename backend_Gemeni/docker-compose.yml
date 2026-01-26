@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  tarot-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tarot-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+    env_file:
+      - .env
+    volumes:
+      - ./app.py:/app/app.py
+      - ./layout.py:/app/layout.py
+      - ./prompts.py:/app/prompts.py
+      - ./card_data.json:/app/card_data.json
+      - ./tarotdeck:/app/tarotdeck
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - tarot-network
+
+networks:
+  tarot-network:
+    driver: bridge

@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  tarot-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tarot-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./tinyllama-tarot-q4_k_m.gguf:/app/tinyllama-tarot-q4_k_m.gguf:ro
+      - ./card_data.json:/app/card_data.json:ro
+      - ./tarotdeck:/app/tarotdeck:ro
+      - ./.env:/app/.env
+      - ./app.py:/app/app.py
+      - ./layout.py:/app/layout.py
+      - ./translator.py:/app/translator.py
+      - ./prompts.py:/app/prompts.py
+    restart: unless-stopped
