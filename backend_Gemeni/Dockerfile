@@ -9,6 +9,8 @@ COPY app.py .
 COPY layout.py .
 COPY prompts.py .
 COPY card_data.json .
+COPY tarotdeck/ ./tarotdeck/
+COPY mock_chunks.json .
 
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
