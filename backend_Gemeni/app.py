@@ -11,6 +11,7 @@ from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 import os
+import asyncio
 
 from pydantic import BaseModel
 import uvicorn
@@ -54,6 +55,58 @@ class TarotResponse(BaseModel):
 app = FastAPI(lifespan=lifespan)
 
 app.mount("/tarotdeck", StaticFiles(directory=BASE_DIR / "tarotdeck"), name="tarotdeck")
+# @app.get("/tarot", response_model=TarotResponse)
+# async def get_tarot_reading(
+#     option: str = Query(..., pattern="^(linear|balance|advice)$"),
+#     query: str = Query(..., min_length=10, max_length=500)
+# ):
+#     try:
+#         model = TarotModel(option, query, data=load_card_data())
+
+#         cyrillic = len(re.findall(r'[а-яА-ЯёЁ]', query))
+#         language = "ru" if cyrillic > 0 else "en"
+#         async def event_stream():
+#             # Отправляем начальные данные
+#             initial_data = {
+#                 "option": option,
+#                 "query": query,
+#                 "cards": model.cards,
+#                 "language": language
+#             }
+#             yield f"data: {json.dumps(initial_data, ensure_ascii=False)}\n\n"
+            
+#             # Стримим ответ от Gemini
+#             response_stream = client.models.generate_content_stream(
+#                 model=api_model,
+#                 contents=model.query,
+#                 config=types.GenerateContentConfig(
+#                     system_instruction=model.prompt
+#                 )
+#             )
+            
+#             for chunk in response_stream:
+#                 if chunk.text:
+#                     chunk_data = {"answer_chunk": chunk.text}
+#                     yield f"data: {json.dumps(chunk_data, ensure_ascii=False)}\n\n"
+            
+#             # Сигнал завершения
+#             yield "data: {\"done\": true}\n\n"
+        
+#         return StreamingResponse(event_stream(), media_type="text/event-stream")
+    
+#     except ValueError as e:
+#         raise HTTPException(status_code=400, detail=f"Invalid input: {str(e)}")
+#     except FileNotFoundError:
+#         raise HTTPException(status_code=500, detail="Card data file not found")
+#     except TimeoutError:
+#         raise HTTPException(status_code=504, detail="LLM generation timeout")
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+
+
+
+# для ТЕСТА, ПОТОМ УБРАТЬ
+
 @app.get("/tarot", response_model=TarotResponse)
 async def get_tarot_reading(
     option: str = Query(..., pattern="^(linear|balance|advice)$"),
@@ -61,11 +114,11 @@ async def get_tarot_reading(
 ):
     try:
         model = TarotModel(option, query, data=load_card_data())
-
         cyrillic = len(re.findall(r'[а-яА-ЯёЁ]', query))
         language = "ru" if cyrillic > 0 else "en"
+
         async def event_stream():
-            # Отправляем начальные данные
+            # 1. Отправляем начальные данные (карты и т.д.)
             initial_data = {
                 "option": option,
                 "query": query,
@@ -74,32 +127,45 @@ async def get_tarot_reading(
             }
             yield f"data: {json.dumps(initial_data, ensure_ascii=False)}\n\n"
             
-            # Стримим ответ от Gemini
-            response_stream = client.models.generate_content_stream(
-                model=api_model,
-                contents=model.query,
-                config=types.GenerateContentConfig(
-                    system_instruction=model.prompt
-                )
-            )
+            # --- ЗАМЕНА GEMINI НА ЛОКАЛЬНЫЙ ФАЙЛ ---
+            # Путь к файлу с мок-данными
+            mock_file_path = "mock_chunks.json"
             
-            for chunk in response_stream:
-                if chunk.text:
-                    chunk_data = {"answer_chunk": chunk.text}
-                    yield f"data: {json.dumps(chunk_data, ensure_ascii=False)}\n\n"
+            try:
+                with open(mock_file_path, "r", encoding="utf-8") as f:
+                    lines = f.readlines()
+                
+                for line in lines:
+                    if line.strip():  # Пропускаем пустые строки
+                        # Убираем префикс "data: " и парсим JSON
+                        if line.startswith("data: "):
+                            json_str = line[6:]  # Убираем "data: " префикс
+                        else:
+                            json_str = line
+                        
+                        try:
+                            chunk_data = json.loads(json_str)
+                            yield f"data: {json.dumps(chunk_data, ensure_ascii=False)}\n\n"
+                        except json.JSONDecodeError:
+                            # Если не удалось распарсить как JSON, отправляем как текст
+                            chunk_data = {"answer_chunk": json_str.strip()}
+                            yield f"data: {json.dumps(chunk_data, ensure_ascii=False)}\n\n"
+                        
+                        # Имитируем задержку сети/генерации, чтобы тест был реалистичным
+                        await asyncio.sleep(0.1)
             
+            except FileNotFoundError:
+                error_msg = {"answer_chunk": "Ошибка: Файл с мок-данными не найден."}
+                yield f"data: {json.dumps(error_msg, ensure_ascii=False)}\n\n"
+            # --- КОНЕЦ ЗАМЕНЫ ---
+
             # Сигнал завершения
             yield "data: {\"done\": true}\n\n"
         
         return StreamingResponse(event_stream(), media_type="text/event-stream")
     
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid input: {str(e)}")
-    except FileNotFoundError:
-        raise HTTPException(status_code=500, detail="Card data file not found")
-    except TimeoutError:
-        raise HTTPException(status_code=504, detail="LLM generation timeout")
     except Exception as e:
+        # Логика обработки ошибок остается прежней
         raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
 
 
